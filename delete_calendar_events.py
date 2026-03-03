@@ -1,6 +1,7 @@
 """
 Office 365 Calendar Cleaner - Microsoft Graph API
-Deletes ALL calendar events for a specific user in your tenant.
+Deletes calendar events for a specific user in your tenant.
+Optionally filter by a search term to only delete matching events.
 
 SETUP:
 1. pip install requests msal
@@ -22,6 +23,10 @@ CLIENT_ID     = "YOUR_CLIENT_ID_HERE"
 TENANT_ID     = "YOUR_TENANT_ID_HERE"
 CLIENT_SECRET = "YOUR_CLIENT_SECRET_HERE"
 TARGET_USER   = "user@yourdomain.com"   # Email of the user whose calendar to clear
+
+# Optional: only delete events whose subject contains this word/phrase
+# Leave as empty string "" to delete ALL events
+SEARCH_TERM   = ""   # e.g. "zoom" or "standup" or ""
 # ============================================================
 
 AUTHORITY  = f"https://login.microsoftonline.com/{TENANT_ID}"
@@ -61,6 +66,15 @@ def get_all_events(headers):
     return events
 
 
+def filter_events(events, search_term):
+    if not search_term:
+        return events
+    term = search_term.lower()
+    matched = [e for e in events if term in e.get("subject", "").lower()]
+    print(f"Events matching \"{search_term}\": {len(matched)}")
+    return matched
+
+
 def delete_events(headers, events):
     total = len(events)
     deleted = 0
@@ -93,6 +107,10 @@ def main():
         sys.exit(1)
 
     print(f"\nTarget user: {TARGET_USER}")
+    if SEARCH_TERM:
+        print(f"Filter:      Only events containing \"{SEARCH_TERM}\"")
+    else:
+        print(f"Filter:      None (all events will be deleted)")
 
     token = get_access_token()
     headers = {
@@ -101,13 +119,22 @@ def main():
     }
 
     print("\nFetching all calendar events...")
-    events = get_all_events(headers)
+    all_events = get_all_events(headers)
+
+    events = filter_events(all_events, SEARCH_TERM)
 
     if not events:
-        print("No events found - calendar is already empty!")
+        if SEARCH_TERM:
+            print(f"No events found matching \"{SEARCH_TERM}\".")
+        else:
+            print("No events found - calendar is already empty!")
         return
 
-    print(f"\nWARNING: This will permanently delete {len(events)} events for {TARGET_USER}.")
+    if SEARCH_TERM:
+        print(f"\nWARNING: This will permanently delete {len(events)} events matching \"{SEARCH_TERM}\" for {TARGET_USER}.")
+    else:
+        print(f"\nWARNING: This will permanently delete ALL {len(events)} events for {TARGET_USER}.")
+
     confirm = input("Type YES to confirm: ").strip()
     if confirm != "YES":
         print("Aborted. No events were deleted.")

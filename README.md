@@ -1,10 +1,11 @@
 # Office 365 Calendar Cleaner
 
-A Python script to bulk-delete all calendar events for a specific user in an Office 365 / Microsoft 365 tenant using the Microsoft Graph API.
+A Python script to bulk-delete calendar events for a specific user in an Office 365 / Microsoft 365 tenant using the Microsoft Graph API. Supports deleting all events or filtering by a search term.
 
-## Use Case
+## Use Cases
 
-Useful for IT admins who need to wipe a user's calendar — for example when offboarding staff, resetting a shared mailbox, or cleaning up test accounts.
+- Delete all events from a user's calendar (e.g. offboarding, resetting a shared mailbox)
+- Delete only events matching a keyword (e.g. all "Zoom" meetings, all "Standup" entries)
 
 ---
 
@@ -50,7 +51,17 @@ CLIENT_ID     = "YOUR_CLIENT_ID_HERE"       # Application (client) ID from Azure
 TENANT_ID     = "YOUR_TENANT_ID_HERE"       # Directory (tenant) ID from Azure
 CLIENT_SECRET = "YOUR_CLIENT_SECRET_HERE"   # Client secret value from Azure
 TARGET_USER   = "user@yourdomain.com"       # Email of the user whose calendar to clear
+
+SEARCH_TERM   = ""                          # Optional: filter by keyword (e.g. "zoom")
 ```
+
+### SEARCH_TERM examples
+
+| Value | Behaviour |
+|---|---|
+| `""` | Deletes **all** events |
+| `"zoom"` | Deletes only events with "zoom" in the subject (case-insensitive) |
+| `"standup"` | Deletes only events with "standup" in the subject |
 
 > **Never commit your real credentials to version control.** Consider using environment variables or a `.env` file for sensitive values.
 
@@ -65,9 +76,10 @@ python delete_calendar_events.py
 The script will:
 1. Authenticate with Microsoft Graph
 2. Fetch all calendar events for the target user
-3. Show you the total count
-4. Ask you to type `YES` to confirm before deleting anything
-5. Delete all events and print a summary
+3. Filter by search term (if set)
+4. Show you the matching count
+5. Ask you to type `YES` to confirm before deleting anything
+6. Delete matching events and print a summary
 
 ---
 
