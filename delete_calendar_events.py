@@ -1,14 +1,15 @@
 """
 Office 365 Calendar Cleaner - Microsoft Graph API
-Deletes calendar events for a specific user in your tenant.
-Optionally filter by a search term to only delete matching events.
+Deletes calendar events from your own Office 365 calendar.
+Authenticates via interactive browser login using your Microsoft account.
 
 SETUP:
 1. pip install requests msal
 2. In Azure Portal, ensure your app has:
-   - API Permission: Microsoft Graph > Application > Calendars.ReadWrite
-   - Admin consent granted
-3. Fill in your credentials below
+   - API Permission: Microsoft Graph > Delegated > Calendars.ReadWrite
+   - Under Authentication: add a Mobile/Desktop redirect URI:
+     https://login.microsoftonline.com/common/oauth2/nativeclient
+3. Fill in CLIENT_ID and TENANT_ID below
 4. Run: python delete_calendar_events.py
 """
 
@@ -19,44 +20,55 @@ import sys
 # ============================================================
 # CONFIG - Fill these in with your Azure app details
 # ============================================================
-CLIENT_ID     = "YOUR_CLIENT_ID_HERE"
-TENANT_ID     = "YOUR_TENANT_ID_HERE"
-CLIENT_SECRET = "YOUR_CLIENT_SECRET_HERE"
-TARGET_USER   = "user@yourdomain.com"   # Email of the user whose calendar to clear
+CLIENT_ID   = "YOUR_CLIENT_ID_HERE"     # Application (client) ID from Azure
+TENANT_ID   = "YOUR_TENANT_ID_HERE"     # Directory (tenant) ID from Azure
+                                         # (or use "common" for any Microsoft account)
 
 # Optional: only delete events whose subject contains this word/phrase
 # Leave as empty string "" to delete ALL events
-SEARCH_TERM   = ""   # e.g. "zoom" or "standup" or ""
+SEARCH_TERM = ""   # e.g. "zoom" or "standup" or ""
 # ============================================================
 
 AUTHORITY  = f"https://login.microsoftonline.com/{TENANT_ID}"
-SCOPES     = ["https://graph.microsoft.com/.default"]
+SCOPES     = ["Calendars.ReadWrite"]
 GRAPH_BASE = "https://graph.microsoft.com/v1.0"
 
 
 def get_access_token():
-    app = msal.ConfidentialClientApplication(
+    app = msal.PublicClientApplication(
         CLIENT_ID,
         authority=AUTHORITY,
-        client_credential=CLIENT_SECRET,
     )
-    result = app.acquire_token_for_client(scopes=SCOPES)
+
+    # Try to get a token silently from cache first
+    accounts = app.get_accounts()
+    result = None
+    if accounts:
+        result = app.acquire_token_silent(SCOPES, account=accounts[0])
+
+    # Fall back to interactive browser login
+    if not result:
+        print("Opening browser for Microsoft login...")
+        result = app.acquire_token_interactive(scopes=SCOPES)
+
     if "access_token" not in result:
         print("Authentication failed:")
         print(result.get("error_description", result))
         sys.exit(1)
-    print("Authenticated successfully")
+
+    # Show who is logged in
+    account = result.get("id_token_claims", {})
+    name  = account.get("name", "")
+    email = account.get("preferred_username", "")
+    print(f"Authenticated as: {name} ({email})")
     return result["access_token"]
 
 
 def get_all_events(headers):
     events = []
-    url = f"{GRAPH_BASE}/users/{TARGET_USER}/events?$select=id,subject&$top=100"
+    url = f"{GRAPH_BASE}/me/events?$select=id,subject&$top=100"
     while url:
         response = requests.get(url, headers=headers)
-        if response.status_code == 404:
-            print(f"User '{TARGET_USER}' not found. Check the email address.")
-            sys.exit(1)
         response.raise_for_status()
         data = response.json()
         events.extend(data.get("value", []))
@@ -82,7 +94,7 @@ def delete_events(headers, events):
     for i, event in enumerate(events, 1):
         event_id = event["id"]
         subject = event.get("subject", "(no title)")
-        url = f"{GRAPH_BASE}/users/{TARGET_USER}/events/{event_id}"
+        url = f"{GRAPH_BASE}/me/events/{event_id}"
         response = requests.delete(url, headers=headers)
         if response.status_code == 204:
             deleted += 1
@@ -98,19 +110,14 @@ def main():
     print("  Office 365 Calendar Cleaner")
     print("=" * 55)
 
-    if "YOUR_" in CLIENT_ID or "YOUR_" in TENANT_ID or "YOUR_" in CLIENT_SECRET:
-        print("Please fill in CLIENT_ID, TENANT_ID, and CLIENT_SECRET in the CONFIG section.")
+    if "YOUR_" in CLIENT_ID or "YOUR_" in TENANT_ID:
+        print("Please fill in CLIENT_ID and TENANT_ID in the CONFIG section.")
         sys.exit(1)
 
-    if TARGET_USER == "user@yourdomain.com":
-        print("Please set TARGET_USER to the email address of the user.")
-        sys.exit(1)
-
-    print(f"\nTarget user: {TARGET_USER}")
     if SEARCH_TERM:
-        print(f"Filter:      Only events containing \"{SEARCH_TERM}\"")
+        print(f"\nFilter: Only events containing \"{SEARCH_TERM}\"")
     else:
-        print(f"Filter:      None (all events will be deleted)")
+        print(f"\nFilter: None (all events will be deleted)")
 
     token = get_access_token()
     headers = {
@@ -131,9 +138,9 @@ def main():
         return
 
     if SEARCH_TERM:
-        print(f"\nWARNING: This will permanently delete {len(events)} events matching \"{SEARCH_TERM}\" for {TARGET_USER}.")
+        print(f"\nWARNING: This will permanently delete {len(events)} events matching \"{SEARCH_TERM}\".")
     else:
-        print(f"\nWARNING: This will permanently delete ALL {len(events)} events for {TARGET_USER}.")
+        print(f"\nWARNING: This will permanently delete ALL {len(events)} events from your calendar.")
 
     confirm = input("Type YES to confirm: ").strip()
     if confirm != "YES":
