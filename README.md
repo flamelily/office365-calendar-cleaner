@@ -25,7 +25,7 @@ Authenticates via an interactive browser login — no admin credentials or clien
 2. Search for **App registrations** → click **New registration**
 3. Give it a name (e.g. `Calendar Cleaner`) → click **Register**
 4. Note down your **Application (client) ID** and **Directory (tenant) ID**
-5. Go to **Authentication** → **Add a platform** → **Mobile and desktop applications**
+5. Go to **Authentication (preview)** under Manage **Add redirect URI** → **Mobile and desktop applications** (at the bottom)
 6. Tick the redirect URI: `https://login.microsoftonline.com/common/oauth2/nativeclient` → click **Configure**
 7. Go to **API permissions** → **Add a permission** → **Microsoft Graph** → **Delegated permissions**
 8. Search for and add: `Calendars.ReadWrite`
@@ -39,7 +39,7 @@ Authenticates via an interactive browser login — no admin credentials or clien
 ```bash
 python3 -m venv calendar-cleaner
 source calendar-cleaner/bin/activate
-pip install requests msal
+pip3 install requests msal
 ```
 
 ---
@@ -68,7 +68,7 @@ SEARCH_TERM = ""                         # Optional: filter by keyword (e.g. "zo
 ## Usage
 
 ```bash
-python delete_calendar_events.py
+python3 delete_calendar_events.py
 ```
 
 The script will:
